@@ -9455,6 +9455,10 @@ PUGI__NS_BEGIN
 
 		ast_opt_translate_table,		// translate(left, right, third) where right/third are constants
 		ast_opt_compare_attribute		// @name = 'string'
+		,
+		// new
+		ast_func_uppercase,
+		ast_func_lowercase
 	};
 
 	enum axis_t
@@ -10415,7 +10419,7 @@ PUGI__NS_BEGIN
 				if (_rettype == xpath_type_boolean)
 					return _data.variable->get_boolean();
 			}
-
+			
 			// fallthrough
 			default:
 			{
@@ -10834,7 +10838,54 @@ PUGI__NS_BEGIN
 				if (_rettype == xpath_type_string)
 					return xpath_string::from_const(_data.variable->get_string());
 			}
+			case ast_func_uppercase:
+				{
+					xpath_allocator_capture cr(stack.temp);
 
+					xpath_stack swapped_stack = {stack.temp, stack.result};
+					xpath_string s = _left->eval_string(c, stack);
+					char_t* begin = s.data(stack.result);
+					struct foo{
+						static char_t Upper(char_t ch){
+							if('a'<= ch && ch <= 'z'){
+								return ch - 'a' + 'A';
+							}
+							return ch;
+						}
+					};
+					char_t* end = NULL;
+					char_t * pbuff = begin;
+					for(const char_t * p = s.c_str(); p<(s.c_str() + s.length());p++,pbuff++){
+						*pbuff = foo::Upper(*p);
+						end = pbuff + 1;
+					}					
+
+					return xpath_string::from_heap_preallocated(begin, end);
+				}
+			case ast_func_lowercase:
+				{
+					xpath_allocator_capture cr(stack.temp);
+
+					xpath_stack swapped_stack = {stack.temp, stack.result};
+					xpath_string s = _left->eval_string(c, stack);
+					char_t* begin = s.data(stack.result);
+					struct foo{
+						static char_t Lower(char_t ch){
+							if('A'<= ch && ch <= 'Z'){
+								return ch - 'A' + 'a';
+							}
+							return ch;
+						}
+					};
+					char_t* end = NULL;
+					char_t * pbuff = begin;
+					for(const char_t*p = s.c_str(); p<(s.c_str() + s.length());p++,pbuff++){
+						*pbuff = foo::Lower(*p);
+						end = pbuff + 1;
+					}					
+
+					return xpath_string::from_heap_preallocated(begin, end);
+				}
 			// fallthrough
 			default:
 			{
@@ -11256,8 +11307,9 @@ PUGI__NS_BEGIN
 				{
 					if (argc == 1 && args[0]->rettype() != xpath_type_node_set) return error("Function has to be applied to node set");
 					return alloc_node(argc == 0 ? ast_func_local_name_0 : ast_func_local_name_1, xpath_type_string, args[0]);
-				}
-
+				}else if (name == PUGIXML_TEXT("lower-case") && argc == 1)
+					return new (alloc_node()) xpath_ast_node(ast_func_lowercase, xpath_type_string, args[0]);
+				
 				break;
 
 			case 'n':
@@ -11320,7 +11372,10 @@ PUGI__NS_BEGIN
 					return alloc_node(ast_func_true, xpath_type_boolean);
 
 				break;
-
+			case 'u':
+				if (name == PUGIXML_TEXT("upper-case") && argc == 1)
+					return new (alloc_node()) xpath_ast_node(ast_func_uppercase, xpath_type_string, args[0]);
+				break;
 			default:
 				break;
 			}
@@ -12852,7 +12907,7 @@ namespace pugi
 		return query.evaluate_node(*this);
 	}
 }
-
+ 
 #endif
 
 #ifdef __BORLANDC__
